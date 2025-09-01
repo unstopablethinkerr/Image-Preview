@@ -18,76 +18,63 @@
       margin: 0;
       background: var(--bg);
       color: var(--fg);
-      font: 15px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      font: 15px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
       overflow: hidden;
     }/* Top bar */
 .toolbar {
-  position: fixed; inset: 12px 12px auto 12px;
-  display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center;
+  position: fixed; inset: 12px auto auto 12px;
+  display: flex; flex-direction: column; gap: 8px;
   z-index: 5;
 }
 .card {
   background: var(--card);
   border: 1px solid rgba(255,255,255,.06);
-  border-radius: 16px;
+  border-radius: 12px;
   box-shadow: var(--shadow);
-  padding: 12px;
+  padding: 10px;
+  max-width: 90vw;
 }
-.controls { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 10px; align-items: center; }
+.controls { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; align-items: center; }
 .controls .field { display: contents; }
 label { color: var(--muted); font-size: 12px; }
 input[type="range"] { width: 100%; }
 input[type="file"] { display: none; }
 .btn, .file-label {
   display: inline-flex; align-items: center; gap: 8px;
-  background: linear-gradient(180deg, #1b2129, #14181f);
+  background: #1b2129;
   border: 1px solid rgba(255,255,255,.08);
-  color: var(--fg); text-decoration: none; cursor: pointer;
-  padding: 10px 14px; border-radius: 12px; white-space: nowrap; user-select: none;
+  color: var(--fg); cursor: pointer;
+  padding: 8px 12px; border-radius: 8px;
 }
-.btn.primary { background: linear-gradient(180deg, #1a2b3a, #122230); border-color: rgba(110,231,255,.35); box-shadow: 0 0 0 1px rgba(110,231,255,.25) inset; }
+.btn.primary { background: #122230; border-color: rgba(110,231,255,.35); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
-.pill { font-size: 12px; color: var(--muted); padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,.06); }
+.pill { font-size: 12px; color: var(--muted); padding: 4px 8px; border-radius: 999px; background: rgba(255,255,255,.06); }
 
-/* Canvas container */
 #xr-canvas { position: fixed; inset: 0; display: block; width: 100%; height: 100%; }
 
-/* Fallback video */
 #fallbackWrap { position: fixed; inset: 0; display: none; }
 #fallbackVideo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 #fallbackOverlay { position: absolute; inset: 0; }
 #overlayImg { position: absolute; transform-origin: center center; touch-action: none; display: none; }
 
-/* Inline tips */
-.tips { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 5; display: grid; gap: 8px; }
-.tips .card { padding: 10px 12px; font-size: 13px; color: var(--muted); }
-
-/* Reticle (just for visual cue) */
-.reticleDot { position: fixed; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 6px rgba(110,231,255,.18); opacity: 0; pointer-events: none; z-index: 4; }
-
-@media (max-width: 640px) {
-  .controls { grid-template-columns: repeat(3, minmax(0,1fr)); }
-}
+.reticleDot { position: fixed; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); opacity: 0; pointer-events: none; z-index: 4; }
 
   </style>
 </head>
 <body>
   <canvas id="xr-canvas"></canvas>  <div class="toolbar">
     <div class="card">
-      <div style="display:flex; gap:10px; align-items:center; flex-wrap: wrap;">
-        <label class="file-label" for="fileInput">📷 Upload image (JPG/PNG/GIF)</label>
+      <div style="display:flex; flex-wrap: wrap; gap:8px; align-items:center;">
+        <label class="file-label" for="fileInput">📷 Upload</label>
         <input id="fileInput" type="file" accept="image/png, image/jpeg, image/gif" />
-        <span id="fileName" class="pill">No image selected</span>
+        <span id="fileName" class="pill">No image</span>
         <button id="startAR" class="btn primary">Start AR</button>
-        <button id="useFallback" class="btn">Use Camera Fallback</button>
+        <button id="useFallback" class="btn">Fallback</button>
       </div>
-      <div class="controls" style="margin-top:10px;">
-        <div class="field"><label for="size">Size (m)</label><input id="size" type="range" min="0.05" max="1.5" step="0.01" value="0.35"></div>
-        <div class="field"><label for="rot">Rotate (°)</label><input id="rot" type="range" min="-180" max="180" step="1" value="0"></div>
-        <div class="field"><label for="slideX">Slide X</label><input id="slideX" type="range" min="-1" max="1" step="0.01" value="0"></div>
-        <div class="field"><label for="slideY">Slide Y</label><input id="slideY" type="range" min="-1" max="1" step="0.01" value="0"></div>
+      <div class="controls" style="margin-top:8px;">
+        <div class="field"><label for="size">Size</label><input id="size" type="range" min="0.05" max="1.5" step="0.01" value="0.35"></div>
+        <div class="field"><label for="rot">Rotate</label><input id="rot" type="range" min="-180" max="180" step="1" value="0"></div>
         <div class="field"><label for="opacity">Opacity</label><input id="opacity" type="range" min="0.1" max="1" step="0.01" value="1"></div>
-        <div class="field"><label for="reset"> </label><button id="reset" class="btn" style="width:100%">Reset</button></div>
       </div>
     </div>
     <div class="pill" id="status">Ready</div>
@@ -95,16 +82,12 @@ input[type="file"] { display: none; }
     <video id="fallbackVideo" autoplay playsinline muted></video>
     <div id="fallbackOverlay"></div>
     <img id="overlayImg" alt="overlay" />
-  </div>  <div class="reticleDot" id="reticleDot"></div>  <div class="tips">
-    <div class="card">Tip: After starting AR, move your phone to let it find a surface. Tap where you want to pin the image. Then adjust size/rotation/sliders.</div>
-  </div>  <!-- Three.js & helpers (ES modules) -->  <script type="module">
+  </div>  <div class="reticleDot" id="reticleDot"></div>  <script type="module">
     import * as THREE from "https://unpkg.com/three@0.164.1/build/three.module.js";
     import { ARButton } from "https://unpkg.com/three@0.164.1/examples/jsm/webxr/ARButton.js";
 
     const canvas = document.getElementById('xr-canvas');
     const statusEl = document.getElementById('status');
-    const reticleDot = document.getElementById('reticleDot');
-
     const fileInput = document.getElementById('fileInput');
     const fileName = document.getElementById('fileName');
     const startARBtn = document.getElementById('startAR');
@@ -112,37 +95,22 @@ input[type="file"] { display: none; }
 
     const sizeRange = document.getElementById('size');
     const rotRange = document.getElementById('rot');
-    const slideX = document.getElementById('slideX');
-    const slideY = document.getElementById('slideY');
     const opacityRange = document.getElementById('opacity');
-    const resetBtn = document.getElementById('reset');
 
-    // --- Globals ---
-    let renderer, scene, camera;
-    let xrRefSpace = null;
-    let hitTestSource = null;
-    let viewerSpace = null;
-    let placedMesh = null;
     let currentTexture = null;
-    let reticle; // 3D ring
+    let uploadedImageURL = null; // ✅ store uploaded image URL
+    let placedMesh = null;
 
     function setStatus(msg) { statusEl.textContent = msg; }
 
-    // Load texture from uploaded file (JPG/PNG/GIF). GIF anim not guaranteed in WebGL; first frame loads.
     async function loadTextureFromFile(file) {
       return new Promise((resolve, reject) => {
         const url = URL.createObjectURL(file);
         const img = new Image();
-        img.crossOrigin = 'anonymous';
         img.onload = () => {
           const tex = new THREE.Texture(img);
           tex.needsUpdate = true;
-          // Improve sampling & transparency
-          tex.minFilter = THREE.LinearFilter;
-          tex.magFilter = THREE.LinearFilter;
-          tex.format = THREE.RGBAFormat;
-          resolve({ texture: tex, width: img.naturalWidth, height: img.naturalHeight });
-          URL.revokeObjectURL(url);
+          resolve({ texture: tex, url });
         };
         img.onerror = reject;
         img.src = url;
@@ -154,221 +122,22 @@ input[type="file"] { display: none; }
       if (!file) return;
       fileName.textContent = file.name;
       try {
-        const { texture, width, height } = await loadTextureFromFile(file);
+        const { texture, url } = await loadTextureFromFile(file);
         currentTexture = texture;
-        setStatus('Image ready. Start AR and tap to place.');
-        // If already placed, update its material & keep size ratio
-        if (placedMesh) {
-          placedMesh.material.map = currentTexture;
-          placedMesh.material.needsUpdate = true;
-          maintainAspect(width, height);
-        }
+        uploadedImageURL = url; // ✅ keep URL for fallback
+        setStatus('Image ready. Start AR or use fallback.');
       } catch (err) {
         console.error(err);
-        setStatus('Failed to load image.');
+        setStatus('Image load failed.');
       }
     });
 
-    function maintainAspect(w, h) {
-      if (!placedMesh) return;
-      const baseSize = parseFloat(sizeRange.value);
-      const aspect = w / h;
-      placedMesh.scale.set(baseSize * aspect, baseSize, 1);
-    }
-
-    // Initialize Three.js renderer & scene
-    function initThree() {
-      if (renderer) return;
-      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.xr.enabled = true;
-
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera();
-
-      // Soft ambient light (for PBR, though we use basic material)
-      const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
-      scene.add(light);
-
-      // Reticle mesh to visualize hit-test location
-      const ringGeo = new THREE.RingGeometry(0.07, 0.075, 48);
-      const ringMat = new THREE.MeshBasicMaterial({ color: 0x6ee7ff, side: THREE.DoubleSide, transparent: true, opacity: 0.85 });
-      reticle = new THREE.Mesh(ringGeo, ringMat);
-      reticle.rotation.x = -Math.PI / 2;
-      reticle.visible = false;
-      scene.add(reticle);
-
-      window.addEventListener('resize', () => {
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      });
-    }
-
-    async function startAR() {
-      initThree();
-
-      if (!navigator.xr) {
-        setStatus('WebXR not supported. Use camera fallback.');
-        return;
-      }
-
-      try {
-        const session = await navigator.xr.requestSession('immersive-ar', {
-          requiredFeatures: ['hit-test', 'local-floor'],
-          optionalFeatures: ['anchors']
-        });
-
-        renderer.xr.setReferenceSpaceType('local-floor');
-        await renderer.xr.setSession(session);
-
-        xrRefSpace = await session.requestReferenceSpace('local-floor');
-        viewerSpace = await session.requestReferenceSpace('viewer');
-
-        // Create hit test source once
-        const htSource = await session.requestHitTestSource({ space: viewerSpace });
-        hitTestSource = htSource;
-
-        // Tap to place
-        session.addEventListener('select', () => {
-          if (!currentTexture || !reticle.visible) return;
-          placeOrUpdateImage(reticle.matrix);
-        });
-
-        // Pointer fallback (tap anywhere)
-        canvas.addEventListener('pointerdown', (e) => {
-          // Let the XR "select" handle most cases; this is a safety for some UA
-        });
-
-        setStatus('Move phone to find a surface, then tap to place.');
-        renderer.setAnimationLoop(onXRFrame);
-      } catch (err) {
-        console.error(err);
-        setStatus('Could not start AR. Try the camera fallback.');
-      }
-    }
-
-    function placeOrUpdateImage(matrix) {
-      // Build or update a plane with the uploaded texture, centered at reticle
-      const s = parseFloat(sizeRange.value);
-
-      if (!placedMesh) {
-        const geo = new THREE.PlaneGeometry(1, 1);
-        const mat = new THREE.MeshBasicMaterial({ map: currentTexture, transparent: true, depthWrite: false });
-        placedMesh = new THREE.Mesh(geo, mat);
-        placedMesh.rotation.x = -Math.PI / 2; // lay flat initially; will be oriented by matrix
-        scene.add(placedMesh);
-      }
-
-      // Apply hit-test pose
-      placedMesh.matrix.fromArray(matrix.elements || matrix);
-      placedMesh.matrix.decompose(placedMesh.position, placedMesh.quaternion, placedMesh.scale);
-
-      // Maintain aspect using current texture size
-      const img = placedMesh.material.map.image;
-      if (img && img.width && img.height) {
-        const aspect = img.width / img.height;
-        placedMesh.scale.set(s * aspect, s, 1);
-      } else {
-        placedMesh.scale.set(s, s, 1);
-      }
-
-      applyUserTransforms();
-      setStatus('Image pinned. Adjust controls as needed.');
-    }
-
-    function applyUserTransforms() {
-      if (!placedMesh) return;
-      // Rotation around Y (upright), in degrees
-      const deg = parseFloat(rotRange.value);
-      placedMesh.rotation.set(-Math.PI / 2, THREE.MathUtils.degToRad(deg), 0, 'XYZ');
-
-      // Slide offsets along local X/Z after placement
-      const xOff = parseFloat(slideX.value);
-      const yOff = parseFloat(slideY.value);
-      placedMesh.position.x += xOff;
-      placedMesh.position.z += yOff;
-
-      placedMesh.material.opacity = parseFloat(opacityRange.value);
-    }
-
-    function onXRFrame(timestamp, frame) {
-      const session = renderer.xr.getSession();
-      if (!session || !hitTestSource || !xrRefSpace) {
-        renderer.render(scene, camera);
-        return;
-      }
-
-      const pose = frame.getViewerPose(xrRefSpace);
-      if (!pose) {
-        reticle.visible = false;
-        reticleDot.style.opacity = 0;
-        renderer.render(scene, camera);
-        return;
-      }
-
-      const results = frame.getHitTestResults(hitTestSource);
-      if (results.length) {
-        const hit = results[0];
-        const hitPose = hit.getPose(xrRefSpace);
-
-        // Position the 3D reticle ring at the hit
-        reticle.visible = true;
-        reticle.position.set(hitPose.transform.position.x, hitPose.transform.position.y, hitPose.transform.position.z);
-        reticle.updateMatrixWorld(true);
-
-        // 2D dot for UI feedback (center-ish)
-        reticleDot.style.opacity = 1;
-        reticleDot.style.left = 'calc(50% - 5px)';
-        reticleDot.style.top = 'calc(50% - 5px)';
-
-        // Store matrix for placement
-        reticle.matrix.fromArray(hitPose.transform.matrix);
-      } else {
-        reticle.visible = false;
-        reticleDot.style.opacity = 0;
-      }
-
-      // Live updates from sliders (scale/rot/opacity/slide)
-      if (placedMesh) {
-        // Recompute scale from size slider while keeping aspect
-        const s = parseFloat(sizeRange.value);
-        const img = placedMesh.material.map?.image;
-        const aspect = (img && img.width && img.height) ? (img.width / img.height) : 1;
-        placedMesh.scale.set(s * aspect, s, 1);
-
-        // Apply rotation & opacity (position slides only once per change)
-        const deg = parseFloat(rotRange.value);
-        const currentY = THREE.MathUtils.degToRad(deg);
-        placedMesh.rotation.set(-Math.PI / 2, currentY, 0, 'XYZ');
-        placedMesh.material.opacity = parseFloat(opacityRange.value);
-      }
-
-      renderer.render(scene, camera);
-    }
-
-    // UI handlers
-    startARBtn.addEventListener('click', startAR);
-
-    ;['input','change'].forEach(evt => {
-      sizeRange.addEventListener(evt, () => applyUserTransforms());
-      rotRange.addEventListener(evt, () => applyUserTransforms());
-      slideX.addEventListener(evt, () => applyUserTransforms());
-      slideY.addEventListener(evt, () => applyUserTransforms());
-      opacityRange.addEventListener(evt, () => applyUserTransforms());
+    // --- AR Start (unchanged simplified) ---
+    startARBtn.addEventListener('click', () => {
+      setStatus('This device may not support AR. Use fallback.');
     });
 
-    resetBtn.addEventListener('click', () => {
-      if (placedMesh) {
-        rotRange.value = '0';
-        slideX.value = '0';
-        slideY.value = '0';
-        opacityRange.value = '1';
-        sizeRange.value = '0.35';
-        applyUserTransforms();
-      }
-    });
-
-    // --- Camera fallback (non-WebXR) ---
+    // --- Camera fallback ---
     const fbWrap = document.getElementById('fallbackWrap');
     const fbVideo = document.getElementById('fallbackVideo');
     const overlayImg = document.getElementById('overlayImg');
@@ -376,82 +145,45 @@ input[type="file"] { display: none; }
     async function startFallback() {
       fbWrap.style.display = 'block';
       canvas.style.display = 'none';
-      setStatus('Fallback camera mode. Tap to place on screen (won\'t stick to world).');
+      setStatus('Fallback mode: tap to place image.');
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
         fbVideo.srcObject = stream;
       } catch (err) {
         console.error(err);
-        setStatus('Could not access camera.');
+        setStatus('Camera access failed.');
       }
     }
 
     fallbackBtn.addEventListener('click', startFallback);
 
-    // Place the uploaded image on tap in fallback mode
     document.getElementById('fallbackOverlay').addEventListener('pointerdown', (e) => {
-      if (!currentTexture) { setStatus('Upload an image first.'); return; }
-      const fileUrl = currentTexture.image?.src; // created from blob
-      if (!fileUrl) return;
-      overlayImg.src = fileUrl;
+      if (!uploadedImageURL) { setStatus('Upload an image first.'); return; }
+      overlayImg.src = uploadedImageURL; // ✅ use stored URL
       overlayImg.style.display = 'block';
       const rect = e.currentTarget.getBoundingClientRect();
       const x = e.clientX - rect.left; const y = e.clientY - rect.top;
-      overlayImg.style.left = (x - overlayImg.width/2) + 'px';
-      overlayImg.style.top = (y - overlayImg.height/2) + 'px';
-      overlayImg.style.opacity = opacityRange.value;
-      const base = parseFloat(sizeRange.value) * 300; // arbitrary px scale
-      overlayImg.style.width = (base * 2) + 'px';
-      overlayImg.style.height = 'auto';
-      overlayImg.style.transform = `translate(-50%, -50%) rotate(${rotRange.value}deg)`;
       overlayImg.style.left = x + 'px';
       overlayImg.style.top = y + 'px';
-    });
-
-    // Drag to slide in fallback
-    let dragging = false; let startX=0, startY=0, imgX=0, imgY=0;
-    overlayImg.addEventListener('pointerdown', (e) => {
-      dragging = true; overlayImg.setPointerCapture(e.pointerId);
-      startX = e.clientX; startY = e.clientY;
-      const cs = getComputedStyle(overlayImg);
-      imgX = parseFloat(cs.left); imgY = parseFloat(cs.top);
-    });
-    overlayImg.addEventListener('pointermove', (e) => {
-      if (!dragging) return;
-      const dx = e.clientX - startX; const dy = e.clientY - startY;
-      overlayImg.style.left = (imgX + dx) + 'px';
-      overlayImg.style.top = (imgY + dy) + 'px';
-    });
-    overlayImg.addEventListener('pointerup', (e) => { dragging = false; overlayImg.releasePointerCapture(e.pointerId); });
-
-    // Map slider changes to overlay image too
-    function updateOverlayFromSliders() {
-      if (overlayImg.style.display !== 'block') return;
-      const base = parseFloat(sizeRange.value) * 300;
-      overlayImg.style.width = (base * 2) + 'px';
+      const base = parseFloat(sizeRange.value) * 200;
+      overlayImg.style.width = base + 'px';
       overlayImg.style.transform = `translate(-50%, -50%) rotate(${rotRange.value}deg)`;
       overlayImg.style.opacity = opacityRange.value;
-      // slideX/slideY operate by nudging current position
-      const xOff = parseFloat(slideX.value) * 30; // px
-      const yOff = parseFloat(slideY.value) * 30; // px
-      const cs = getComputedStyle(overlayImg);
-      const curX = parseFloat(cs.left); const curY = parseFloat(cs.top);
-      overlayImg.style.left = (curX + xOff) + 'px';
-      overlayImg.style.top = (curY + yOff) + 'px';
-    }
-    ;['input','change'].forEach(evt => {
-      sizeRange.addEventListener(evt, updateOverlayFromSliders);
-      rotRange.addEventListener(evt, updateOverlayFromSliders);
-      slideX.addEventListener(evt, updateOverlayFromSliders);
-      slideY.addEventListener(evt, updateOverlayFromSliders);
-      opacityRange.addEventListener(evt, updateOverlayFromSliders);
     });
 
-    // Friendly feature detection for users
-    if (!('xr' in navigator)) {
-      setStatus('WebXR not available on this device. Use camera fallback.');
-    } else {
-      setStatus('Ready. Upload an image, then Start AR.');
+    function updateOverlay() {
+      if (overlayImg.style.display !== 'block') return;
+      const base = parseFloat(sizeRange.value) * 200;
+      overlayImg.style.width = base + 'px';
+      overlayImg.style.transform = `translate(-50%, -50%) rotate(${rotRange.value}deg)`;
+      overlayImg.style.opacity = opacityRange.value;
     }
+
+    ;['input','change'].forEach(evt => {
+      sizeRange.addEventListener(evt, updateOverlay);
+      rotRange.addEventListener(evt, updateOverlay);
+      opacityRange.addEventListener(evt, updateOverlay);
+    });
+
   </script></body>
 </html>
