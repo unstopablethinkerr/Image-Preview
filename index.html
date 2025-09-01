@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Surface Detection Trial</title>
+  <title>Refined Surface Detection</title>
   <style>
     body, html {
       margin: 0;
@@ -61,6 +61,7 @@
     const unlockBtn = document.getElementById('unlockBtn');
 
     let lockedSurface = null;
+    let detectedSurfaces = [];
 
     // Start camera
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
@@ -81,8 +82,8 @@
 
       // Find surface where tap happened
       for (let quad of detectedSurfaces) {
-        if (pointInPolygon({x, y}, quad)) {
-          lockedSurface = quad;
+        if (pointInPolygon({x, y}, quad.points)) {
+          lockedSurface = quad.points;
           break;
         }
       }
@@ -92,8 +93,6 @@
     unlockBtn.addEventListener('click', () => {
       lockedSurface = null;
     });
-
-    let detectedSurfaces = [];
 
     function pointInPolygon(point, polygon) {
       let inside = false;
@@ -125,12 +124,12 @@
           cv.Canny(gray, edges, 75, 200);
 
           ctx.drawImage(video, 0, 0, overlay.width, overlay.height);
-
           detectedSurfaces = [];
 
           if (!lockedSurface) {
             cv.findContours(edges, contours, hierarchy, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE);
 
+            let quads = [];
             for (let i = 0; i < contours.size(); i++) {
               const cnt = contours.get(i);
               const peri = cv.arcLength(cnt, true);
@@ -138,30 +137,58 @@
               cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
 
               if (approx.rows === 4) {
-                const quad = [];
-                for (let j = 0; j < 4; j++) {
-                  quad.push({ x: approx.intAt(j, 0), y: approx.intAt(j, 1) });
+                // compute area
+                const area = cv.contourArea(cnt);
+                if (area > 5000) { // ignore small noise
+                  const quad = [];
+                  for (let j = 0; j < 4; j++) {
+                    quad.push({ x: approx.intAt(j, 0), y: approx.intAt(j, 1) });
+                  }
+
+                  // aspect ratio filtering
+                  const w = Math.hypot(quad[0].x - quad[1].x, quad[0].y - quad[1].y);
+                  const h = Math.hypot(quad[1].x - quad[2].x, quad[1].y - quad[2].y);
+                  const ratio = Math.max(w, h) / Math.min(w, h);
+                  if (ratio < 5) {
+                    quads.push({ points: quad, area: area });
+                  }
                 }
-                detectedSurfaces.push(quad);
               }
               approx.delete();
             }
+
+            // sort by area descending, keep top 5
+            quads.sort((a, b) => b.area - a.area);
+            detectedSurfaces = quads.slice(0, 5);
           } else {
-            detectedSurfaces.push(lockedSurface);
+            detectedSurfaces.push({ points: lockedSurface, area: 1 });
           }
 
           // Draw surfaces
           ctx.globalAlpha = 0.4;
           ctx.fillStyle = "blue";
-          for (let quad of detectedSurfaces) {
+          ctx.font = "20px Arial";
+          ctx.globalAlpha = 0.5;
+
+          detectedSurfaces.forEach((quad, index) => {
             ctx.beginPath();
-            ctx.moveTo(quad[0].x, quad[0].y);
-            for (let k = 1; k < quad.length; k++) {
-              ctx.lineTo(quad[k].x, quad[k].y);
+            ctx.moveTo(quad.points[0].x, quad.points[0].y);
+            for (let k = 1; k < quad.points.length; k++) {
+              ctx.lineTo(quad.points[k].x, quad.points[k].y);
             }
             ctx.closePath();
             ctx.fill();
-          }
+
+            // Label
+            const cx = quad.points.reduce((sum, p) => sum + p.x, 0) / 4;
+            const cy = quad.points.reduce((sum, p) => sum + p.y, 0) / 4;
+            ctx.globalAlpha = 1.0;
+            ctx.fillStyle = "yellow";
+            ctx.fillText(`#${index+1}`, cx, cy);
+            ctx.fillStyle = "blue";
+            ctx.globalAlpha = 0.5;
+          });
+
           ctx.globalAlpha = 1.0;
         }
         requestAnimationFrame(processFrame);
