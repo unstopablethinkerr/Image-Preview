@@ -1,9 +1,9 @@
-      <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Surface Tracking with OpenCV.js</title>
+  <title>Surface Detection Trial</title>
   <style>
     body, html {
       margin: 0;
@@ -38,7 +38,7 @@
       background: rgba(0,0,0,0.6);
       padding: 10px;
       border-radius: 10px;
-      z-index: 4;
+      z-index: 3;
       color: white;
       text-align: center;
     }
@@ -47,10 +47,8 @@
 <body>
   <video id="video" autoplay playsinline></video>
   <canvas id="overlay"></canvas>
-
   <div id="controls">
-    <input type="file" id="imageUpload" accept="image/*"><br>
-    <button id="debugToggle">Toggle Debug</button>
+    <button id="unlockBtn">Unlock Surface</button>
   </div>
 
   <!-- OpenCV.js -->
@@ -60,8 +58,9 @@
     const video = document.getElementById('video');
     const overlay = document.getElementById('overlay');
     const ctx = overlay.getContext('2d');
-    let debugMode = true;
-    let uploadedImg = null;
+    const unlockBtn = document.getElementById('unlockBtn');
+
+    let lockedSurface = null;
 
     // Start camera
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
@@ -73,20 +72,40 @@
         };
       });
 
-    // Handle image upload
-    document.getElementById('imageUpload').addEventListener('change', (event) => {
-      const file = event.target.files[0];
-      if (file) {
-        const img = new Image();
-        img.onload = () => { uploadedImg = img; };
-        img.src = URL.createObjectURL(file);
+    // Handle tap to lock surface
+    overlay.addEventListener('click', (e) => {
+      if (!detectedSurfaces.length) return;
+      const rect = overlay.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      // Find surface where tap happened
+      for (let quad of detectedSurfaces) {
+        if (pointInPolygon({x, y}, quad)) {
+          lockedSurface = quad;
+          break;
+        }
       }
     });
 
-    // Toggle debug mode
-    document.getElementById('debugToggle').addEventListener('click', () => {
-      debugMode = !debugMode;
+    // Unlock button
+    unlockBtn.addEventListener('click', () => {
+      lockedSurface = null;
     });
+
+    let detectedSurfaces = [];
+
+    function pointInPolygon(point, polygon) {
+      let inside = false;
+      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const xi = polygon[i].x, yi = polygon[i].y;
+        const xj = polygon[j].x, yj = polygon[j].y;
+        const intersect = ((yi > point.y) !== (yj > point.y))
+          && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    }
 
     function onOpenCvReady() {
       console.log("OpenCV.js ready");
@@ -105,80 +124,45 @@
           cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
           cv.Canny(gray, edges, 75, 200);
 
-          // Find contours
-          cv.findContours(edges, contours, hierarchy, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE);
           ctx.drawImage(video, 0, 0, overlay.width, overlay.height);
 
-          let biggestQuad = null;
-          for (let i = 0; i < contours.size(); i++) {
-            const cnt = contours.get(i);
-            const peri = cv.arcLength(cnt, true);
-            const approx = new cv.Mat();
-            cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
+          detectedSurfaces = [];
 
-            if (approx.rows === 4) {
-              const pts = [];
-              for (let j = 0; j < 4; j++) {
-                pts.push({
-                  x: approx.intAt(j, 0),
-                  y: approx.intAt(j, 1)
-                });
-              }
-              if (!biggestQuad || cv.contourArea(cnt) > cv.contourArea(biggestQuad)) {
-                biggestQuad = pts;
-              }
-            }
-            approx.delete();
-          }
+          if (!lockedSurface) {
+            cv.findContours(edges, contours, hierarchy, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE);
 
-          // Draw debug contours
-          if (debugMode) {
-            ctx.strokeStyle = "lime";
-            ctx.lineWidth = 2;
             for (let i = 0; i < contours.size(); i++) {
               const cnt = contours.get(i);
-              ctx.beginPath();
-              for (let j = 0; j < cnt.data32S.length; j += 2) {
-                const x = cnt.data32S[j];
-                const y = cnt.data32S[j + 1];
-                if (j === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
+              const peri = cv.arcLength(cnt, true);
+              const approx = new cv.Mat();
+              cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
+
+              if (approx.rows === 4) {
+                const quad = [];
+                for (let j = 0; j < 4; j++) {
+                  quad.push({ x: approx.intAt(j, 0), y: approx.intAt(j, 1) });
+                }
+                detectedSurfaces.push(quad);
               }
-              ctx.closePath();
-              ctx.stroke();
+              approx.delete();
             }
+          } else {
+            detectedSurfaces.push(lockedSurface);
           }
 
-          // If quad found, warp and overlay image
-          if (biggestQuad && uploadedImg) {
-            const srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
-              0, 0,
-              uploadedImg.width, 0,
-              uploadedImg.width, uploadedImg.height,
-              0, uploadedImg.height
-            ]);
-
-            const dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
-              biggestQuad[0].x, biggestQuad[0].y,
-              biggestQuad[1].x, biggestQuad[1].y,
-              biggestQuad[2].x, biggestQuad[2].y,
-              biggestQuad[3].x, biggestQuad[3].y
-            ]);
-
-            const M = cv.getPerspectiveTransform(srcTri, dstTri);
-            const dsize = new cv.Size(overlay.width, overlay.height);
-            const warped = new cv.Mat();
-            cv.warpPerspective(cv.imread(uploadedImg), warped, M, dsize);
-
-            // Overlay
-            const warpedCanvas = document.createElement("canvas");
-            warpedCanvas.width = warped.cols;
-            warpedCanvas.height = warped.rows;
-            cv.imshow(warpedCanvas, warped);
-            ctx.drawImage(warpedCanvas, 0, 0);
-
-            warped.delete(); M.delete(); srcTri.delete(); dstTri.delete();
+          // Draw surfaces
+          ctx.globalAlpha = 0.4;
+          ctx.fillStyle = "blue";
+          for (let quad of detectedSurfaces) {
+            ctx.beginPath();
+            ctx.moveTo(quad[0].x, quad[0].y);
+            for (let k = 1; k < quad.length; k++) {
+              ctx.lineTo(quad[k].x, quad[k].y);
+            }
+            ctx.closePath();
+            ctx.fill();
           }
+          ctx.globalAlpha = 1.0;
         }
         requestAnimationFrame(processFrame);
       }
