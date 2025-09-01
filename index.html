@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+      <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Markerless AR with OpenCV.js</title>
+  <title>Surface Tracking with OpenCV.js</title>
   <style>
     body, html {
       margin: 0;
@@ -30,13 +30,6 @@
       height: 100%;
       z-index: 2;
     }
-    #uploadedImage {
-      display: none;
-      position: absolute;
-      transform-origin: center center;
-      z-index: 3;
-      pointer-events: none;
-    }
     #controls {
       position: absolute;
       bottom: 10px;
@@ -54,12 +47,10 @@
 <body>
   <video id="video" autoplay playsinline></video>
   <canvas id="overlay"></canvas>
-  <img id="uploadedImage" />
 
   <div id="controls">
     <input type="file" id="imageUpload" accept="image/*"><br>
-    Scale <input type="range" id="scaleControl" min="0.1" max="3" step="0.1" value="1"><br>
-    Rotate <input type="range" id="rotateControl" min="0" max="360" step="1" value="0">
+    <button id="debugToggle">Toggle Debug</button>
   </div>
 
   <!-- OpenCV.js -->
@@ -69,11 +60,8 @@
     const video = document.getElementById('video');
     const overlay = document.getElementById('overlay');
     const ctx = overlay.getContext('2d');
-    const uploadedImage = document.getElementById('uploadedImage');
-    const scaleControl = document.getElementById('scaleControl');
-    const rotateControl = document.getElementById('rotateControl');
-
-    let selectedPoint = null;
+    let debugMode = true;
+    let uploadedImg = null;
 
     // Start camera
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
@@ -89,57 +77,107 @@
     document.getElementById('imageUpload').addEventListener('change', (event) => {
       const file = event.target.files[0];
       if (file) {
-        uploadedImage.src = URL.createObjectURL(file);
-        uploadedImage.style.display = 'block';
+        const img = new Image();
+        img.onload = () => { uploadedImg = img; };
+        img.src = URL.createObjectURL(file);
       }
     });
 
-    // Overlay click → set anchor
-    overlay.addEventListener('click', (e) => {
-      const rect = overlay.getBoundingClientRect();
-      selectedPoint = {
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top
-      };
+    // Toggle debug mode
+    document.getElementById('debugToggle').addEventListener('click', () => {
+      debugMode = !debugMode;
     });
 
     function onOpenCvReady() {
-      console.log("OpenCV.js is ready");
+      console.log("OpenCV.js ready");
 
       const cap = new cv.VideoCapture(video);
       const src = new cv.Mat(video.height, video.width, cv.CV_8UC4);
       const gray = new cv.Mat();
-      const corners = new cv.Mat();
+      const edges = new cv.Mat();
+      const contours = new cv.MatVector();
+      const hierarchy = new cv.Mat();
 
       function processFrame() {
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
           cap.read(src);
           cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+          cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
+          cv.Canny(gray, edges, 75, 200);
 
-          // Detect corners
-          cv.goodFeaturesToTrack(gray, corners, 100, 0.01, 10);
+          // Find contours
+          cv.findContours(edges, contours, hierarchy, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE);
           ctx.drawImage(video, 0, 0, overlay.width, overlay.height);
 
-          for (let i = 0; i < corners.rows; i++) {
-            const x = corners.data32F[i * 2];
-            const y = corners.data32F[i * 2 + 1];
-            ctx.beginPath();
-            ctx.arc(x, y, 4, 0, 2 * Math.PI);
-            ctx.fillStyle = "lime";
-            ctx.fill();
+          let biggestQuad = null;
+          for (let i = 0; i < contours.size(); i++) {
+            const cnt = contours.get(i);
+            const peri = cv.arcLength(cnt, true);
+            const approx = new cv.Mat();
+            cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
+
+            if (approx.rows === 4) {
+              const pts = [];
+              for (let j = 0; j < 4; j++) {
+                pts.push({
+                  x: approx.intAt(j, 0),
+                  y: approx.intAt(j, 1)
+                });
+              }
+              if (!biggestQuad || cv.contourArea(cnt) > cv.contourArea(biggestQuad)) {
+                biggestQuad = pts;
+              }
+            }
+            approx.delete();
           }
 
-          // Draw uploaded image at selected anchor
-          if (selectedPoint && uploadedImage.src) {
-            const scale = parseFloat(scaleControl.value);
-            const rotation = parseFloat(rotateControl.value);
-            const size = 100 * scale;
+          // Draw debug contours
+          if (debugMode) {
+            ctx.strokeStyle = "lime";
+            ctx.lineWidth = 2;
+            for (let i = 0; i < contours.size(); i++) {
+              const cnt = contours.get(i);
+              ctx.beginPath();
+              for (let j = 0; j < cnt.data32S.length; j += 2) {
+                const x = cnt.data32S[j];
+                const y = cnt.data32S[j + 1];
+                if (j === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+              }
+              ctx.closePath();
+              ctx.stroke();
+            }
+          }
 
-            uploadedImage.style.width = size + "px";
-            uploadedImage.style.height = "auto";
-            uploadedImage.style.left = (selectedPoint.x - size / 2) + "px";
-            uploadedImage.style.top = (selectedPoint.y - size / 2) + "px";
-            uploadedImage.style.transform = `rotate(${rotation}deg)`;
+          // If quad found, warp and overlay image
+          if (biggestQuad && uploadedImg) {
+            const srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+              0, 0,
+              uploadedImg.width, 0,
+              uploadedImg.width, uploadedImg.height,
+              0, uploadedImg.height
+            ]);
+
+            const dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+              biggestQuad[0].x, biggestQuad[0].y,
+              biggestQuad[1].x, biggestQuad[1].y,
+              biggestQuad[2].x, biggestQuad[2].y,
+              biggestQuad[3].x, biggestQuad[3].y
+            ]);
+
+            const M = cv.getPerspectiveTransform(srcTri, dstTri);
+            const dsize = new cv.Size(overlay.width, overlay.height);
+            const warped = new cv.Mat();
+            cv.warpPerspective(cv.imread(uploadedImg), warped, M, dsize);
+
+            // Overlay
+            const warpedCanvas = document.createElement("canvas");
+            warpedCanvas.width = warped.cols;
+            warpedCanvas.height = warped.rows;
+            cv.imshow(warpedCanvas, warped);
+            ctx.drawImage(warpedCanvas, 0, 0);
+
+            warped.delete(); M.delete(); srcTri.delete(); dstTri.delete();
           }
         }
         requestAnimationFrame(processFrame);
