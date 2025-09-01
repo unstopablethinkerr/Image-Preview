@@ -1,67 +1,25 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Refined Surface Detection</title>
+  <meta charset="utf-8">
+  <title>Surface Detection Debug</title>
   <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      background: black;
-      height: 100%;
-      width: 100%;
-    }
-    #video {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      z-index: 1;
-    }
-    #overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 2;
-    }
-    #controls {
-      position: absolute;
-      bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.6);
-      padding: 10px;
-      border-radius: 10px;
-      z-index: 3;
-      color: white;
-      text-align: center;
+    body, html { margin:0; padding:0; overflow:hidden; background:black; }
+    #video, #overlay {
+      position:absolute; top:0; left:0; width:100%; height:100%;
+      object-fit:cover;
     }
   </style>
 </head>
 <body>
   <video id="video" autoplay playsinline></video>
   <canvas id="overlay"></canvas>
-  <div id="controls">
-    <button id="unlockBtn">Unlock Surface</button>
-  </div>
 
-  <!-- OpenCV.js -->
-  <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady();"></script>
-
+  <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
   <script>
-    const video = document.getElementById('video');
-    const overlay = document.getElementById('overlay');
-    const ctx = overlay.getContext('2d');
-    const unlockBtn = document.getElementById('unlockBtn');
-
-    let lockedSurface = null;
-    let detectedSurfaces = [];
+    const video = document.getElementById("video");
+    const overlay = document.getElementById("overlay");
+    const ctx = overlay.getContext("2d");
 
     // Start camera
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
@@ -73,128 +31,63 @@
         };
       });
 
-    // Handle tap to lock surface
-    overlay.addEventListener('click', (e) => {
-      if (!detectedSurfaces.length) return;
-      const rect = overlay.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-
-      // Find surface where tap happened
-      for (let quad of detectedSurfaces) {
-        if (pointInPolygon({x, y}, quad.points)) {
-          lockedSurface = quad.points;
-          break;
-        }
-      }
-    });
-
-    // Unlock button
-    unlockBtn.addEventListener('click', () => {
-      lockedSurface = null;
-    });
-
-    function pointInPolygon(point, polygon) {
-      let inside = false;
-      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-        const xi = polygon[i].x, yi = polygon[i].y;
-        const xj = polygon[j].x, yj = polygon[j].y;
-        const intersect = ((yi > point.y) !== (yj > point.y))
-          && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
-        if (intersect) inside = !inside;
-      }
-      return inside;
-    }
-
+    // Run after OpenCV loads
     function onOpenCvReady() {
-      console.log("OpenCV.js ready");
+      cv['onRuntimeInitialized']=()=>{
+        console.log("✅ OpenCV ready");
 
-      const cap = new cv.VideoCapture(video);
-      const src = new cv.Mat(video.height, video.width, cv.CV_8UC4);
-      const gray = new cv.Mat();
-      const edges = new cv.Mat();
-      const contours = new cv.MatVector();
-      const hierarchy = new cv.Mat();
+        const cap = new cv.VideoCapture(video);
+        const src = new cv.Mat(video.height, video.width, cv.CV_8UC4);
+        const gray = new cv.Mat();
+        const edges = new cv.Mat();
+        const contours = new cv.MatVector();
+        const hierarchy = new cv.Mat();
 
-      function processFrame() {
-        if (video.readyState === video.HAVE_ENOUGH_DATA) {
-          cap.read(src);
-          cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-          cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
-          cv.Canny(gray, edges, 75, 200);
+        function processFrame() {
+          if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            cap.read(src);
+            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+            cv.Canny(gray, edges, 75, 200);
 
-          ctx.drawImage(video, 0, 0, overlay.width, overlay.height);
-          detectedSurfaces = [];
+            ctx.drawImage(video, 0, 0, overlay.width, overlay.height);
 
-          if (!lockedSurface) {
+            // Test: draw edges as red overlay
+            let imgData = new ImageData(new Uint8ClampedArray(edges.data), edges.cols, edges.rows);
+            let tmpCanvas = document.createElement("canvas");
+            tmpCanvas.width = edges.cols;
+            tmpCanvas.height = edges.rows;
+            tmpCanvas.getContext("2d").putImageData(imgData, 0, 0);
+            ctx.globalAlpha = 0.5;
+            ctx.drawImage(tmpCanvas, 0, 0, overlay.width, overlay.height);
+            ctx.globalAlpha = 1.0;
+
+            // Contours (optional)
             cv.findContours(edges, contours, hierarchy, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE);
-
-            let quads = [];
             for (let i = 0; i < contours.size(); i++) {
               const cnt = contours.get(i);
               const peri = cv.arcLength(cnt, true);
               const approx = new cv.Mat();
               cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
-
               if (approx.rows === 4) {
-                // compute area
-                const area = cv.contourArea(cnt);
-                if (area > 5000) { // ignore small noise
-                  const quad = [];
-                  for (let j = 0; j < 4; j++) {
-                    quad.push({ x: approx.intAt(j, 0), y: approx.intAt(j, 1) });
-                  }
-
-                  // aspect ratio filtering
-                  const w = Math.hypot(quad[0].x - quad[1].x, quad[0].y - quad[1].y);
-                  const h = Math.hypot(quad[1].x - quad[2].x, quad[1].y - quad[2].y);
-                  const ratio = Math.max(w, h) / Math.min(w, h);
-                  if (ratio < 5) {
-                    quads.push({ points: quad, area: area });
-                  }
+                ctx.strokeStyle = "lime";
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(approx.intAt(0,0), approx.intAt(0,1));
+                for (let j = 1; j < 4; j++) {
+                  ctx.lineTo(approx.intAt(j,0), approx.intAt(j,1));
                 }
+                ctx.closePath();
+                ctx.stroke();
               }
               approx.delete();
             }
-
-            // sort by area descending, keep top 5
-            quads.sort((a, b) => b.area - a.area);
-            detectedSurfaces = quads.slice(0, 5);
-          } else {
-            detectedSurfaces.push({ points: lockedSurface, area: 1 });
           }
-
-          // Draw surfaces
-          ctx.globalAlpha = 0.4;
-          ctx.fillStyle = "blue";
-          ctx.font = "20px Arial";
-          ctx.globalAlpha = 0.5;
-
-          detectedSurfaces.forEach((quad, index) => {
-            ctx.beginPath();
-            ctx.moveTo(quad.points[0].x, quad.points[0].y);
-            for (let k = 1; k < quad.points.length; k++) {
-              ctx.lineTo(quad.points[k].x, quad.points[k].y);
-            }
-            ctx.closePath();
-            ctx.fill();
-
-            // Label
-            const cx = quad.points.reduce((sum, p) => sum + p.x, 0) / 4;
-            const cy = quad.points.reduce((sum, p) => sum + p.y, 0) / 4;
-            ctx.globalAlpha = 1.0;
-            ctx.fillStyle = "yellow";
-            ctx.fillText(`#${index+1}`, cx, cy);
-            ctx.fillStyle = "blue";
-            ctx.globalAlpha = 0.5;
-          });
-
-          ctx.globalAlpha = 1.0;
+          requestAnimationFrame(processFrame);
         }
         requestAnimationFrame(processFrame);
       }
-      requestAnimationFrame(processFrame);
     }
+    onOpenCvReady();
   </script>
 </body>
 </html>
