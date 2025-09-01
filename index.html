@@ -1,189 +1,133 @@
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AR Image Placer • WebXR + Fallback</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Markerless AR with Tracking.js</title>
   <style>
-    :root {
-      --bg: #0b0d10;
-      --fg: #e7ebf0;
-      --muted: #a7b0bf;
-      --accent: #6ee7ff;
-      --card: #13161b;
-      --shadow: 0 10px 30px rgba(0,0,0,.35);
-    }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; }
-    body {
+    body, html {
       margin: 0;
-      background: var(--bg);
-      color: var(--fg);
-      font: 15px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      padding: 0;
       overflow: hidden;
-    }/* Top bar */
-.toolbar {
-  position: fixed; inset: 12px auto auto 12px;
-  display: flex; flex-direction: column; gap: 8px;
-  z-index: 5;
-}
-.card {
-  background: var(--card);
-  border: 1px solid rgba(255,255,255,.06);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  padding: 10px;
-  max-width: 90vw;
-}
-.controls { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; align-items: center; }
-.controls .field { display: contents; }
-label { color: var(--muted); font-size: 12px; }
-input[type="range"] { width: 100%; }
-input[type="file"] { display: none; }
-.btn, .file-label {
-  display: inline-flex; align-items: center; gap: 8px;
-  background: #1b2129;
-  border: 1px solid rgba(255,255,255,.08);
-  color: var(--fg); cursor: pointer;
-  padding: 8px 12px; border-radius: 8px;
-}
-.btn.primary { background: #122230; border-color: rgba(110,231,255,.35); }
-.btn:disabled { opacity: .5; cursor: not-allowed; }
-.pill { font-size: 12px; color: var(--muted); padding: 4px 8px; border-radius: 999px; background: rgba(255,255,255,.06); }
-
-#xr-canvas { position: fixed; inset: 0; display: block; width: 100%; height: 100%; }
-
-#fallbackWrap { position: fixed; inset: 0; display: none; }
-#fallbackVideo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-#fallbackOverlay { position: absolute; inset: 0; }
-#overlayImg { position: absolute; transform-origin: center center; touch-action: none; display: none; }
-
-.reticleDot { position: fixed; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); opacity: 0; pointer-events: none; z-index: 4; }
-
+      background: black;
+      height: 100%;
+      width: 100%;
+    }
+    #video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
+    }
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2;
+    }
+    #controls {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.6);
+      padding: 10px;
+      border-radius: 10px;
+      z-index: 3;
+      color: white;
+      text-align: center;
+    }
+    #uploadedImage {
+      display: none;
+      position: absolute;
+      transform-origin: center center;
+      z-index: 2;
+      pointer-events: none;
+    }
+    input[type="file"] {
+      margin-bottom: 5px;
+    }
   </style>
 </head>
 <body>
-  <canvas id="xr-canvas"></canvas>  <div class="toolbar">
-    <div class="card">
-      <div style="display:flex; flex-wrap: wrap; gap:8px; align-items:center;">
-        <label class="file-label" for="fileInput">📷 Upload</label>
-        <input id="fileInput" type="file" accept="image/png, image/jpeg, image/gif" />
-        <span id="fileName" class="pill">No image</span>
-        <button id="startAR" class="btn primary">Start AR</button>
-        <button id="useFallback" class="btn">Fallback</button>
-      </div>
-      <div class="controls" style="margin-top:8px;">
-        <div class="field"><label for="size">Size</label><input id="size" type="range" min="0.05" max="1.5" step="0.01" value="0.35"></div>
-        <div class="field"><label for="rot">Rotate</label><input id="rot" type="range" min="-180" max="180" step="1" value="0"></div>
-        <div class="field"><label for="opacity">Opacity</label><input id="opacity" type="range" min="0.1" max="1" step="0.01" value="1"></div>
-      </div>
-    </div>
-    <div class="pill" id="status">Ready</div>
-  </div>  <div id="fallbackWrap">
-    <video id="fallbackVideo" autoplay playsinline muted></video>
-    <div id="fallbackOverlay"></div>
-    <img id="overlayImg" alt="overlay" />
-  </div>  <div class="reticleDot" id="reticleDot"></div>  <script type="module">
-    import * as THREE from "https://unpkg.com/three@0.164.1/build/three.module.js";
-    import { ARButton } from "https://unpkg.com/three@0.164.1/examples/jsm/webxr/ARButton.js";
+  <video id="video" autoplay playsinline></video>
+  <canvas id="overlay"></canvas>
+  <img id="uploadedImage" />
 
-    const canvas = document.getElementById('xr-canvas');
-    const statusEl = document.getElementById('status');
-    const fileInput = document.getElementById('fileInput');
-    const fileName = document.getElementById('fileName');
-    const startARBtn = document.getElementById('startAR');
-    const fallbackBtn = document.getElementById('useFallback');
+  <div id="controls">
+    <input type="file" id="imageUpload" accept="image/*"><br>
+    Scale <input type="range" id="scaleControl" min="0.1" max="3" step="0.1" value="1"><br>
+    Rotate <input type="range" id="rotateControl" min="0" max="360" step="1" value="0">
+  </div>
 
-    const sizeRange = document.getElementById('size');
-    const rotRange = document.getElementById('rot');
-    const opacityRange = document.getElementById('opacity');
+  <!-- tracking.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/tracking@1.1.3/build/tracking-min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tracking@1.1.3/build/data/color-min.js"></script>
 
-    let currentTexture = null;
-    let uploadedImageURL = null; // ✅ store uploaded image URL
-    let placedMesh = null;
+  <script>
+    const video = document.getElementById('video');
+    const overlay = document.getElementById('overlay');
+    const context = overlay.getContext('2d');
+    const uploadedImage = document.getElementById('uploadedImage');
+    const scaleControl = document.getElementById('scaleControl');
+    const rotateControl = document.getElementById('rotateControl');
 
-    function setStatus(msg) { statusEl.textContent = msg; }
-
-    async function loadTextureFromFile(file) {
-      return new Promise((resolve, reject) => {
-        const url = URL.createObjectURL(file);
-        const img = new Image();
-        img.onload = () => {
-          const tex = new THREE.Texture(img);
-          tex.needsUpdate = true;
-          resolve({ texture: tex, url });
+    // Start camera
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+      .then(stream => {
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          overlay.width = video.videoWidth;
+          overlay.height = video.videoHeight;
         };
-        img.onerror = reject;
-        img.src = url;
       });
-    }
 
-    fileInput.addEventListener('change', async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      fileName.textContent = file.name;
-      try {
-        const { texture, url } = await loadTextureFromFile(file);
-        currentTexture = texture;
-        uploadedImageURL = url; // ✅ keep URL for fallback
-        setStatus('Image ready. Start AR or use fallback.');
-      } catch (err) {
-        console.error(err);
-        setStatus('Image load failed.');
+    // Handle image upload
+    document.getElementById('imageUpload').addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        uploadedImage.src = URL.createObjectURL(file);
+        uploadedImage.style.display = 'block';
       }
     });
 
-    // --- AR Start (unchanged simplified) ---
-    startARBtn.addEventListener('click', () => {
-      setStatus('This device may not support AR. Use fallback.');
+    // Tracking.js color detection (default: red)
+    tracking.ColorTracker.registerColor('customRed', function(r, g, b) {
+      return r > 150 && g < 80 && b < 80; // detect red
     });
 
-    // --- Camera fallback ---
-    const fbWrap = document.getElementById('fallbackWrap');
-    const fbVideo = document.getElementById('fallbackVideo');
-    const overlayImg = document.getElementById('overlayImg');
+    const tracker = new tracking.ColorTracker(['customRed']);
+    tracking.track('#video', tracker, { camera: true });
 
-    async function startFallback() {
-      fbWrap.style.display = 'block';
-      canvas.style.display = 'none';
-      setStatus('Fallback mode: tap to place image.');
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        fbVideo.srcObject = stream;
-      } catch (err) {
-        console.error(err);
-        setStatus('Camera access failed.');
-      }
-    }
+    tracker.on('track', function(event) {
+      context.clearRect(0, 0, overlay.width, overlay.height);
 
-    fallbackBtn.addEventListener('click', startFallback);
+      if (event.data.length === 0) return; // no detection
 
-    document.getElementById('fallbackOverlay').addEventListener('pointerdown', (e) => {
-      if (!uploadedImageURL) { setStatus('Upload an image first.'); return; }
-      overlayImg.src = uploadedImageURL; // ✅ use stored URL
-      overlayImg.style.display = 'block';
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = e.clientX - rect.left; const y = e.clientY - rect.top;
-      overlayImg.style.left = x + 'px';
-      overlayImg.style.top = y + 'px';
-      const base = parseFloat(sizeRange.value) * 200;
-      overlayImg.style.width = base + 'px';
-      overlayImg.style.transform = `translate(-50%, -50%) rotate(${rotRange.value}deg)`;
-      overlayImg.style.opacity = opacityRange.value;
+      event.data.forEach(rect => {
+        // Center of detected object
+        const x = rect.x + rect.width / 2;
+        const y = rect.y + rect.height / 2;
+
+        if (uploadedImage.src) {
+          const scale = parseFloat(scaleControl.value);
+          const rotation = parseFloat(rotateControl.value);
+          const size = 100 * scale;
+
+          uploadedImage.style.width = size + "px";
+          uploadedImage.style.height = "auto";
+          uploadedImage.style.left = (x - size / 2) + "px";
+          uploadedImage.style.top = (y - size / 2) + "px";
+          uploadedImage.style.transform = `rotate(${rotation}deg)`;
+        }
+      });
     });
-
-    function updateOverlay() {
-      if (overlayImg.style.display !== 'block') return;
-      const base = parseFloat(sizeRange.value) * 200;
-      overlayImg.style.width = base + 'px';
-      overlayImg.style.transform = `translate(-50%, -50%) rotate(${rotRange.value}deg)`;
-      overlayImg.style.opacity = opacityRange.value;
-    }
-
-    ;['input','change'].forEach(evt => {
-      sizeRange.addEventListener(evt, updateOverlay);
-      rotRange.addEventListener(evt, updateOverlay);
-      opacityRange.addEventListener(evt, updateOverlay);
-    });
-
-  </script></body>
+  </script>
+</body>
 </html>
